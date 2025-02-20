@@ -83,7 +83,7 @@ X = StandardScaler().fit_transform(X)
 
 
 #
-n_components = 6
+n_components = 8
 gmm = mixture.GaussianMixture(
         n_components=n_components,
         covariance_type="full",
@@ -125,8 +125,8 @@ sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = "Craton", ax
 plt.yscale('log')
 plt.xscale('log')
 # %%
-#plot_order = ["saline", 'silicic', 'silicic - low-Mg carbonatitic', 'low-Mg carbonatitic','high-Mg carbonatitic'  ]
-sns.catplot(Classification_Comp, x  = "Craton", y = "Clusters" , alpha = 0.2, size = 10 )
+plot_order = ['Superior Craton', 'Slave Craton','West African Craton','Congo Craton','Kalahari Craton','Siberian Craton' ]
+sns.catplot(Classification_Comp, x  = "Craton", y = "Clusters" , alpha = 0.2, size = 10, order = plot_order )
 plt.xticks(rotation=30)
 
 pivot_table = Classification_Comp.pivot_table(index='Craton', columns='Clusters', aggfunc='size', fill_value=0)
@@ -144,7 +144,7 @@ pivot_table
 from sklearn.model_selection import train_test_split
 
 # Assuming X is your feature data and y is your target variable
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=134)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=134)
 
 
 from sklearn.gaussian_process import GaussianProcessClassifier
@@ -158,7 +158,11 @@ gpc_rbf_anisotropic = GaussianProcessClassifier(kernel=kernel).fit(X_train, y_tr
 y__test_pred = gpc_rbf_anisotropic.predict(X_test)
 
 test_Classification_Comp = pd.DataFrame({"Actual":y_test, "Predicted": y__test_pred})
+#%%
 
+y__test_pred_proba = gpc_rbf_anisotropic.predict_proba(X_test)
+
+y_test_pred_prob_df = pd.DataFrame(y__test_pred_proba, columns =  gpc_rbf_anisotropic.classes_, index = y_test)
 #%%
 test_pivot_table = test_Classification_Comp.pivot_table(index='Actual', columns='Predicted', aggfunc='size', fill_value=0)
 test_pivot_table
@@ -172,6 +176,7 @@ plt.yticks(rotation=60)
 
 
 y_all_pred = gpc_rbf_anisotropic.predict(X)
+
 #%%
 fig, ax = plt.subplots()
 sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = y_all_pred, ax = ax, palette=cmap)

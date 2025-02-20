@@ -54,7 +54,10 @@ plt.xscale('log')
 
 
 # %% Select Data Columns for Clustering
-filtered_col = [ "Nb/La", "Zr/Sr", "Zr/La", "Rb/Sr", "Ba/Sr", "U/Sr", "Ba/Ce", "La/Ce", "Pb/U", "Y/La", "Zr/Y", "Zr/Nb", "Nb/La", "MgO/La", "Al2O3/La"] # "Al/La", "Mg/La", "Mg/Sr"]
+filtered_col = [ "Nb/La", "Zr/Sr", "Zr/La", "Rb/Sr", "Ba/Sr", "U/Sr", "Ba/Ce", "La/Ce", "Pb/U", "Y/La", "Zr/Y", "Zr/Nb", "Nb/La", 
+                #"MgO/La", "Al2O3/La", "MgO/Sr", "MgO/Ba", "Al2O3/Sr", "Al2O3/Ba"
+                 # "Al/La", "Mg/La", "Mg/Sr"
+                ]
 df_filtered = df[filtered_col].dropna()
 df_filtered.head()
 HDF_type = df.loc[df_filtered.index]["HDF Type (calculated)"]
@@ -75,7 +78,7 @@ def log_transform(x):
 
 scaler = StandardScaler()
 transformer = FunctionTransformer(log_transform)
-#X = transformer.fit_transform(X)
+X = transformer.fit_transform(X)
 X = StandardScaler().fit_transform(X)
 
 
