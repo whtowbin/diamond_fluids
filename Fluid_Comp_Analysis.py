@@ -2,7 +2,6 @@
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
-import numpy as np
 # %%
 
 #GOAL: To determine reasonable relationships to classify diamond forming fluids using the elements that can be measured in twinning wisps by LA-ICP-MS 
@@ -54,30 +53,16 @@ plt.xscale('log')
 
 
 # %% Build log-ratio features from element concentrations
-# The Excel ratio columns store a missing numerator as 0 (every Pb/U == 0 row has no Pb measured,
-# same for the Y/La and Nb/La zeros), so the ratios are computed here from the concentrations instead.
-# Blanks, zeros and below-detection strings ("<DL", "nd", "< LQ") all become NaN.
-# Each element is divided by Ce and logged: ratios span orders of magnitude and most are < 1,
-# where log(x + 1) squashes them toward 0. Adding Th, REE, Cs, K, Ti, Hf, Ta or Mg, Al, Na
-# did not improve the group-by-paper score below (10/7/25).
-label = "HDF Type (calculated)"
-elements = ["Rb", "Sr", "Y", "Zr", "Nb", "Ba", "La", "Pb", "U"]
-reference = "Ce"
+# log(element/Ce) from the concentration columns, missing kept as NaN (see hdf_compilation.py:
+# the Excel ratio columns store a missing numerator as 0, and log(x + 1) squashes ratios below 1)
+from hdf_compilation import HDF_TYPES, LABEL, has_trace_data, log_ratios, make_classifier
 
-
-def concentration(element):
-    c = pd.to_numeric(df[element], errors="coerce")
-    return c.where(c > 0)
-
-
-log_ratios = pd.DataFrame(
-    {f"log {e}/{reference}": np.log(concentration(e) / concentration(reference)) for e in elements}
-)
-has_data = df[label].notna() & (log_ratios.notna().sum(axis=1) >= 3)
-X = log_ratios[has_data].to_numpy()
-y = df.loc[has_data, label].to_numpy()
+features = log_ratios(df)
+has_data = df[LABEL].notna() & has_trace_data(features)
+X = features[has_data].to_numpy()
+y = df.loc[has_data, LABEL].to_numpy()
 groups = df.loc[has_data, "Reference"].fillna("unknown").to_numpy()
-log_ratios[has_data].describe()
+features[has_data].describe()
 
 #%% Clustering Algorithms
 from sklearn import mixture
@@ -130,7 +115,7 @@ sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = "HDF_type", 
 plt.yscale('log')
 plt.xscale('log')
 # %%
-plot_order = ["saline", 'silicic', 'silicic - low-Mg carbonatitic', 'low-Mg carbonatitic','high-Mg carbonatitic'  ]
+plot_order = HDF_TYPES
 sns.catplot(Classification_Comp, x  = "HDF_type", y = "Clusters", order=plot_order , alpha = 0.2, size = 10 )
 plt.xticks(rotation=30)
 
@@ -144,20 +129,13 @@ pivot_table
 
 # Linear Trees Model doesnt work well for multi-classification problems, but will likely work for soemething like a thermometer or time series 
 #%% Classification
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.model_selection import GroupKFold, StratifiedKFold, cross_val_predict
 
-# Imputer and scaler sit inside the pipeline so each CV fold fits them on its training rows only.
-# class_weight="balanced" stops the model favouring high-Mg carbonatitic, the largest class.
-# C=0.1 (fairly strong regularisation) scored best of 0.03-1, though all were within ~0.02.
+# Balanced logistic regression on the log ratios (pipeline in hdf_compilation.make_classifier).
 # An anisotropic-RBF Gaussian process classifier, used before 10/7/25, predicted high-Mg carbonatitic
 # for almost every row (balanced accuracy 0.23-0.28, chance is 0.20).
-classifier = make_pipeline(
-    SimpleImputer(strategy="median"),
-    StandardScaler(),
-    LogisticRegression(C=0.1, class_weight="balanced", max_iter=5000),
-)
+classifier = make_classifier()
 
 # Stratified CV mixes rows from the same paper (one lab, usually one locality) into train and test.
 # Group-by-paper CV holds out whole papers: the honest estimate for classifying new data from our lab.
@@ -176,7 +154,7 @@ test_pivot_table
 #%% Which log ratios push a fluid toward each type (fit on all rows, coefficients in standard deviations)
 classifier.fit(X, y)
 coefficients = pd.DataFrame(
-    classifier[-1].coef_, index=classifier[-1].classes_, columns=log_ratios.columns
+    classifier[-1].coef_, index=classifier[-1].classes_, columns=features.columns
 ).loc[plot_order]
 coefficients.round(2)
 # %%

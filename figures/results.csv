@@ -1,0 +1,10 @@
+setup,n,classes,stratified_mean,stratified_sd,held_out_papers
+"Previous: Excel ratios, log(x+1), Gaussian process",153,5,0.298,0.072,0.245
+"Excel ratios, log(x+1), logistic regression",153,5,0.521,0.101,0.411
+"Log ratios from concentrations, logistic regression",192,5,0.568,0.065,0.545
+Craton: trace-element ratios,187,4,0.531,0.096,0.333
+Craton: fluid type only,187,4,0.403,0.071,0.415
+Locality: trace-element ratios,151,8,0.618,0.089,
+Locality: fluid type only,151,8,0.237,0.051,
+"Locality, multi-paper only: trace-element ratios",95,5,0.693,0.062,0.442
+"Locality, multi-paper only: fluid type only",95,5,0.48,0.08,0.395

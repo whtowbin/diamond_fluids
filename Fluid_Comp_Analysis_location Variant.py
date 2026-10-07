@@ -2,7 +2,6 @@
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
-import numpy as np
 # %%
 
 #GOAL: To determine reasonable relationships to classify diamond forming fluids using the elements that can be measured in twinning wisps by LA-ICP-MS 
@@ -53,36 +52,34 @@ plt.yscale('log')
 plt.xscale('log')
 
 
-# %% Select Data Columns for Clustering
-filtered_col = [ "Nb/La", "Zr/Sr", "Zr/La", "Rb/Sr", "Ba/Sr", "U/Sr", "Ba/Ce", "La/Ce", "Pb/U", "Y/La", "Zr/Y", "Zr/Nb", "Nb/La", 
-                "MgO/La", "Al2O3/La", "MgO/Sr", "MgO/Ba", "Al2O3/Sr", "Al2O3/Ba"
-                 # "Al/La", "Mg/La", "Mg/Sr"
-                ]
-df_filtered = df[filtered_col].dropna()
-df_filtered.head()
-Craton = df.loc[df_filtered.index]["Craton"]
+# %% Build log-ratio features from element concentrations
+# log(element/Ce) from the concentration columns, missing kept as NaN (see hdf_compilation.py:
+# the Excel ratio columns store a missing numerator as 0, and log(x + 1) squashes ratios below 1)
+from hdf_compilation import LABEL, has_trace_data, log_ratios, make_classifier
+
+target = "Craton"
+# Cratons with fewer rows with trace data are dropped (Superior 3, Congo 2): too few to cross-validate
+min_rows = 10
+features = log_ratios(df)
+has_data = has_trace_data(features) & df[target].notna()
+counts = df.loc[has_data, target].value_counts()
+plot_order = counts[counts >= min_rows].index.tolist()
+keep = has_data & df[target].isin(plot_order)
+X = features[keep].to_numpy()
+y = df.loc[keep, target].to_numpy()
+groups = df.loc[keep, "Reference"].fillna("unknown").to_numpy()
+hdf_type = df.loc[keep, [LABEL]].fillna("unknown")
+counts
+
 #%% Clustering Algorithms
-from sklearn import cluster, datasets, mixture
-from sklearn.neighbors import kneighbors_graph
+from sklearn import mixture
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
 
-X = df_filtered.to_numpy()
-y = Craton
-# apply log transfrom to data for normalization
-def log_transform(x):
-    print(x)
-    return np.log(x + 1)
+# Missing values are filled with the column median, then each log ratio is scaled to unit variance
+X_scaled = make_pipeline(SimpleImputer(strategy="median"), StandardScaler()).fit_transform(X)
 
-
-scaler = StandardScaler()
-transformer = FunctionTransformer(log_transform)
-X = transformer.fit_transform(X)
-X = StandardScaler().fit_transform(X)
-
-
-#
 n_components = 8
 gmm = mixture.GaussianMixture(
         n_components=n_components,
@@ -90,12 +87,12 @@ gmm = mixture.GaussianMixture(
         random_state=1,
     )
 
-gmm.fit(X)
-y_pred = gmm.predict(X)
+gmm.fit(X_scaled)
+y_pred = gmm.predict(X_scaled)
 
-
-Classification_Comp = pd.DataFrame({"Craton":Craton, "Clusters": y_pred})
-Classification_Comp = Classification_Comp.join(df_filtered)
+plot_cols = ["Rb/Sr", "Zr/La", "Ba/Ce", "La/Ce"]
+Classification_Comp = pd.DataFrame({"Craton": y, "Clusters": y_pred}, index=df.index[keep])
+Classification_Comp = Classification_Comp.join(df[plot_cols].where(df[plot_cols] > 0))
 # %%
 cmap = sns.color_palette("hls", n_components)
 fig, ax = plt.subplots()
@@ -125,73 +122,63 @@ sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = "Craton", ax
 plt.yscale('log')
 plt.xscale('log')
 # %%
-plot_order = ['Superior Craton', 'Slave Craton','West African Craton','Congo Craton','Kalahari Craton','Siberian Craton' ]
 sns.catplot(Classification_Comp, x  = "Craton", y = "Clusters" , alpha = 0.2, size = 10, order = plot_order )
 plt.xticks(rotation=30)
 
 pivot_table = Classification_Comp.pivot_table(index='Craton', columns='Clusters', aggfunc='size', fill_value=0)
 pivot_table
-# %%
+#%% Classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.model_selection import GroupKFold, StratifiedKFold, cross_val_predict
+from sklearn.preprocessing import OneHotEncoder
 
-# Summary of classification methods 1/14/25 
-# I can reliably cluster the Saline fluid inclusions from the Silic and Carbonatitic
-# The Other inclusions are harder to distinguish from each other, There appear to be mixing arrays between Sili 
+# Balanced logistic regression on the log ratios (pipeline in hdf_compilation.make_classifier).
+# An anisotropic-RBF Gaussian process classifier, used before 10/7/25, scored on a single split.
+classifier = make_classifier()
 
-# Linear Trees Model doesnt work well for multi-classification problems, but will likely work for soemething like a thermometer or time series 
-#%%
+# Baseline that knows only the fluid type. Cratons differ in which fluid types were sampled (Slave is mostly
+# saline, Siberia mostly carbonatitic), so fluid type alone predicts craton fairly well.
+# Beating chance alone does not show a compositional fingerprint; the trace-element model has to
+# beat this baseline.
+baseline = make_pipeline(
+    OneHotEncoder(handle_unknown="ignore"), LogisticRegression(class_weight="balanced", max_iter=5000)
+)
 
+stratified = StratifiedKFold(5, shuffle=True, random_state=0)
+y_pred_strat = cross_val_predict(classifier, X, y, cv=stratified)
+y_pred_baseline = cross_val_predict(baseline, hdf_type, y, cv=stratified)
+print(f"n = {len(y)}, {len(plot_order)} classes, chance balanced accuracy = {1 / len(plot_order):.2f}")
+print(f"balanced accuracy, stratified 5-fold, trace-element ratios: {balanced_accuracy_score(y, y_pred_strat):.3f}")
+print(f"balanced accuracy, stratified 5-fold, fluid type only:      {balanced_accuracy_score(y, y_pred_baseline):.3f}")
 
-from sklearn.model_selection import train_test_split
+# Each craton was studied by 3-12 papers, so whole papers can be held out: the closer test for
+# classifying new data from our lab, since each paper is one lab and usually one locality.
+y_pred_group = cross_val_predict(classifier, X, y, cv=GroupKFold(5), groups=groups)
+y_pred_group_baseline = cross_val_predict(baseline, hdf_type, y, cv=GroupKFold(5), groups=groups)
+print(f"balanced accuracy, group-by-paper 5-fold, trace-element ratios: {balanced_accuracy_score(y, y_pred_group):.3f}")
+print(f"balanced accuracy, group-by-paper 5-fold, fluid type only:      {balanced_accuracy_score(y, y_pred_group_baseline):.3f}")
 
-# Assuming X is your feature data and y is your target variable
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=134)
-
-
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RBF
-
-kernel_init_array = np.ones(X.shape[1])
-kernel = 1.0 * RBF(kernel_init_array )
-gpc_rbf_anisotropic = GaussianProcessClassifier(kernel=kernel).fit(X_train, y_train)
-
-# %%
-y__test_pred = gpc_rbf_anisotropic.predict(X_test)
-
-test_Classification_Comp = pd.DataFrame({"Actual":y_test, "Predicted": y__test_pred})
-#%%
-
-y__test_pred_proba = gpc_rbf_anisotropic.predict_proba(X_test)
-
-y_test_pred_prob_df = pd.DataFrame(y__test_pred_proba, columns =  gpc_rbf_anisotropic.classes_, index = y_test)
-#%%
-test_pivot_table = test_Classification_Comp.pivot_table(index='Actual', columns='Predicted', aggfunc='size', fill_value=0)
+#%% Confusion matrix: rows are the actual Craton, columns the predicted Craton
+test_pivot_table = pd.DataFrame(
+    confusion_matrix(y, y_pred_group, labels=plot_order), index=plot_order, columns=plot_order
+)
 test_pivot_table
-
-#%%
-#plot_order = ["saline", 'silicic', 'silicic - low-Mg carbonatitic', 'low-Mg carbonatitic','high-Mg carbonatitic' ]
-sns.catplot(test_Classification_Comp, x  = "Actual", y = "Predicted",  alpha = 0.2, size = 10)
-plt.xticks(rotation=60)
-plt.yticks(rotation=60)
 # %%
 
 
-y_all_pred = gpc_rbf_anisotropic.predict(X)
-
+classifier.fit(X, y)
+y_all_pred = classifier.predict(X)
 #%%
 fig, ax = plt.subplots()
-sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = y_all_pred, ax = ax, palette=cmap)
+sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = y_all_pred, hue_order=plot_order, ax = ax)
 
 plt.yscale('log')
 plt.xscale('log')
 
 fig, ax = plt.subplots()
-sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = "Craton", ax = ax)
+sns.scatterplot(Classification_Comp, y = "Ba/Ce", x= "La/Ce", hue = "Craton", hue_order=plot_order, ax = ax)
 
 plt.yscale('log')
 plt.xscale('log')
-# %%
-
-
-# Using A Gaussian Mixture process with an anisotropic kernel,
-#  I can classify Silicic, Carbonatitic, and Saline Fluid inclusions in Fibrous Diamonds. 
 # %%
