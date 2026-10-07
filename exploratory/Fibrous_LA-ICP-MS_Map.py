@@ -312,7 +312,7 @@ calibrations = make_calibrations(
     df_dict[standard_key], standards_dict[standard_key], internal_standard=internal_standard
 )
 
-sample_key = "TE doped graphite"  # "macs-3 georem" #"G_NIST612"
+sample_key = "macs-3 georem"  # "G_NIST612"
 
 data_calib = appy_calibration(
     df_dict[sample_key], calibrations, True, standards_dict[sample_key].loc[internal_standard].Value
@@ -325,13 +325,36 @@ standards_dict[sample_key]
 df_calibrated.to_excel(
     f"standard-{sample_key} concentrations_internalstandard-{internal_standard}.xlsx"
 )
-standards_dict[sample_key].T[df_calibrated.columns].to_excel(
-    f"standard-{sample_key} known concentrations_internalstandard-{internal_standard}.xlsx"
+standards_dict[standard_key].T[df_calibrated.columns].to_excel(
+    f"standard-{standard_key} known concentrations_internalstandard-{internal_standard}.xlsx"
 )
 # %%
 
 
-internal_standard = "Ba"
+# %%
+
+internal_standard = "C"
+standard_key = "macs-3 georem"
+calibrations = make_calibrations(
+    df_dict[standard_key], standards_dict[standard_key], internal_standard=internal_standard
+)
+
+sample_key = "TE doped graphite"  # "macs-3 georem" #"G_NIST612"
+
+data_calib = appy_calibration(df_dict[sample_key], calibrations, True, 100 * 10000)
+
+df_calibrated = pd.DataFrame(data_calib[0])
+
+# standards_dict[sample_key]
+# %%
+df_calibrated.to_excel(
+    f"sample-{sample_key} concentrations_standard-{standard_key}_internalstandard-{internal_standard}.xlsx"
+)
+# standards_dict[sample_key].T[df_calibrated.columns].to_excel(f"standard-{sample_key} known concentrations_internalstandard-{internal_standard}.xlsx")
+#
+# # %%
+
+internal_standard = "U"
 standard_key = "G_NIST612"
 calibrations = make_calibrations(
     df_dict[standard_key], standards_dict[standard_key], internal_standard=internal_standard
@@ -339,18 +362,14 @@ calibrations = make_calibrations(
 
 sample_key = "TE doped graphite"  # "macs-3 georem" #"G_NIST612"
 
-data_calib = appy_calibration(
-    df_dict[sample_key], calibrations, True, standards_dict[sample_key].loc[internal_standard].Value
-)
+data_calib = appy_calibration(df_dict[sample_key], calibrations, True, 4)
 
 df_calibrated = pd.DataFrame(data_calib[0])
 
-standards_dict[sample_key]
+# standards_dict[sample_key]
 # %%
 df_calibrated.to_excel(
-    f"standard-{sample_key} concentrations_internalstandard-{internal_standard}.xlsx"
+    f"sample-{sample_key} concentrations_standard-{standard_key}_internalstandard-{internal_standard}.xlsx"
 )
-standards_dict[sample_key].T[df_calibrated.columns].to_excel(
-    f"standard-{sample_key} known concentrations_internalstandard-{internal_standard}.xlsx"
-)
+# standards_dict[sample_key].T[df_calibrated.colu
 # %%
