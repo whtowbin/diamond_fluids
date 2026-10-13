@@ -95,3 +95,7 @@ The three analysis scripts are written as VS Code / Jupyter cells (`#%%`) and ca
 Weiss, Y., Czas, J. and Navon, O. (2022). Fluid inclusions in fibrous diamonds. *Reviews in Mineralogy and Geochemistry* 88, 475-532. https://doi.org/10.1515/9781501517044-009
 
 The fluid types are those in the compilation's "HDF Type (calculated)" column. Weiss et al. assign them from major elements normalised to 100 wt%: saline, Cl ≥ 15 wt%; silicic, SiO2 ≥ 40 wt%; silicic–low-Mg carbonatitic, SiO2 20 to 40 wt% with MgO ≤ 15 wt%; low-Mg carbonatitic, SiO2 ≤ 20 wt%, MgO ≤ 15 wt% and CaO ≥ 15 wt%; high-Mg carbonatitic, SiO2 ≤ 20 wt% and MgO ≥ 15 wt%.
+
+## License
+
+The code is under the MIT License (see LICENSE). The compilation spreadsheet comes from Weiss et al. (2022); cite that paper if you use the data.
